@@ -1,18 +1,49 @@
 const express = require("express");
 
+const db = require('./connection/db');
+
 const app = express();
-const PORT = 8000;
+const PORT = 6500;
 
 // const isLogin = true;
 
 app.set("view engine", "hbs"); //setup template engine / view engine
 
+// db.connect(function (err, _, done){
+//   if (err) throw err;
+//   console.log('Database Connection Success');
+//   done();
+// })
+
 app.use("/public", express.static(__dirname + "/public"));
 
 app.use(express.urlencoded({ extended: false }));
 
+let projects = [];
+
 app.get("/", (req, res) => {
-  res.render("index");
+  db.connect(function (err, client, done){
+    if (err) throw err;
+
+    const query = 'SELECT * FROM tb_projects';
+
+    client.query(query, function(err,result){
+      if (err) throw err;
+
+      const projectsData = result.rows;
+
+      const newProject = projectsData.map((project)=>{
+        project.duration = getDistanceTime(project.end_date,project.start_date);
+        return project;
+      });
+
+      console.log(newProject);
+
+      res.render("index", { projects: newProject });
+
+    });
+    done();
+  });
 });
 
 app.listen(PORT, () => {
@@ -29,17 +60,250 @@ app.get("/add-project", (req, res) => {
 
 app.post("/contact-me", (req, res) => {
   const data = req.body;
-  console.log(data);
+  // console.log(data);
 
   res.redirect("/contact-me");
 });
 
 app.post("/add-project", (req, res) => {
-  const data = req.body;
-  console.log(data);
+  const name = req.body.name;
+  const start_date = req.body.startDate;
+  const end_date = req.body.endDate;
+  const description = req.body.description;
+  const technologies = [];
+  if(req.body.html){
+    technologies.push('html');
+  } else {
+    technologies.push('');
+  }
+  if(req.body.javascript){
+    technologies.push('javascript');
+  } else {
+    technologies.push('');
+  }
+  if(req.body.css){
+    technologies.push('css');
+  } else {
+    technologies.push('');
+  }
+  if(req.body.php){
+    technologies.push('php');
+  } else {
+    technologies.push('');
+  }
+  const image = req.body.image;
 
-  res.redirect("/add-project");
+  db.connect(function (err, client, done) {
+    if (err) throw err;
+
+    const query = `INSERT INTO tb_projects(name,start_date,end_date,description,technologies,image) VALUES('${name}','${start_date}','${end_date}','${description}', ARRAY ['${technologies[0]}','${technologies[1]}','${technologies[2]}','${technologies[3]}'],'${image}');`;
+
+    client.query(query, function (err, result) {
+      if (err) throw err;
+
+      res.redirect('/');
+    });
+
+    done();
+  });
 });
+
+app.get("/delete-project/:id", (req, res) => {
+  const id = req.params.id;
+
+  db.connect(function (err, client, done) {
+    if (err) throw err;
+
+    const query = `DELETE FROM tb_projects WHERE id = ${id};`;
+
+    client.query(query, function (err, result) {
+      if (err) throw err;
+
+      res.redirect('/');
+    });
+
+    done();
+  });
+});
+
+// app.get("/edit-project/:index", (req, res) => {
+//   const index = req.params.index;
+//   let project = projects[index];
+
+//   res.render("edit-project", { data: index, project });
+// });
+
+app.get("/edit-project/:id", (req, res) => {
+  const id = req.params.id;
+
+  db.connect(function (err, client, done) {
+    if (err) throw err;
+    const query = `SELECT * FROM tb_projects WHERE id = ${id}`;
+
+    client.query(query, function (err, result) {
+      if (err) throw err;
+
+      const project = result.rows[0];
+      project.startdate = formattedTime(project.start_date);
+      project.enddate = formattedTime(project.end_date);
+
+      console.log(project);
+      res.render('edit-project', { project, id });
+    });
+
+    done();
+  });
+});
+
+app.get("/detail-project/:id", (req, res) => {
+  const id = req.params.id;
+
+  db.connect(function (err, client, done) {
+    if (err) throw err;
+    const query = `SELECT * FROM tb_projects WHERE id = ${id}`;
+
+    client.query(query, function (err, result) {
+      if (err) throw err;
+
+      const project = result.rows[0];
+
+      project.startDateNew = getFullTime(project.start_date);
+      project.endDateNew = getFullTime(project.end_date);
+      project.duration = getDistanceTime(project.end_date, project.start_date)
+
+      res.render('detail-project', { project });
+    });
+
+    done();
+  });
+});
+
+// app.post("/edit-project/:index", (req, res) => {
+//   const data = req.body;
+
+//   projects[req.params.index] = {
+//     name: data["name"],
+//     startDate: data["startDate"],
+//     endDate: data["endDate"],
+//     image: data["image"],
+//     description: data["description"],
+//     technologies: data["technologies"],
+//     duration: getDistanceTime(data["endDate"], data["startDate"]),
+//     startDateNew: getFullTime(data["startDate"]),
+//     endDateNew: getFullTime(data["endDate"])
+//   };
+
+app.post("/edit-project/:id", (req, res) => {
+  id = req.params.id;
+  const name = req.body.name;
+  const start_date = req.body.startDate;
+  const end_date = req.body.endDate;
+  const description = req.body.description;
+  const technologies = [];
+  if(req.body.html){
+    technologies.push('html');
+  } else {
+    technologies.push('');
+  }
+  if(req.body.javascript){
+    technologies.push('javascript');
+  } else {
+    technologies.push('');
+  }
+  if(req.body.css){
+    technologies.push('css');
+  } else {
+    technologies.push('');
+  }
+  if(req.body.php){
+    technologies.push('php');
+  } else {
+    technologies.push('');
+  }
+  const image = req.body.image;
+
+  db.connect(function (err, client, done) {
+    if (err) throw err;
+
+    const query = `UPDATE tb_projects SET name='${name}',start_date='${start_date}',end_date='${end_date}',description='${description}',technologies=ARRAY ['${technologies[0]}','${technologies[1]}','${technologies[2]}','${technologies[3]}'],image='${image}' WHERE id='${id}';`;
+
+    client.query(query, function (err, result) {
+      if (err) throw err;
+
+      res.redirect('/');
+    });
+
+    done();
+  });
+});
+
+const month = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+function getFullTime(time) {
+  let newTime = new Date(time);
+  const date = newTime.getDate();
+  const monthIndex = newTime.getMonth();
+  const year = newTime.getFullYear();
+
+  const fullTime = `${date} ${month[monthIndex]} ${year}`;
+
+  return fullTime;
+}
+
+function formattedTime(time) {
+  let newTime = new Date(time);
+  const date = newTime.getDate();
+  const monthIndex = newTime.getMonth() + 1;
+  const year = newTime.getFullYear();
+
+  if(monthIndex<10){
+    monthformat = '0' + monthIndex;
+  } else {
+    monthformat = monthIndex;
+  }
+
+  
+  if(date<10){
+    dateformat = '0' + date;
+  } else {
+    dateformat = date;
+  }
+
+  const fullTime = `${year}-${monthformat}-${dateformat}`;
+
+  return fullTime;
+}
+
+function getDistanceTime(time1, time2) {
+  const endDate = new Date(time1);
+  const startDate = new Date(time2);
+
+  const distance = endDate - startDate;
+
+  const milisecondsInMonth = 1000 * 60 * 60 * 24 * 30;
+  const distanceMonth = Math.floor(distance / milisecondsInMonth);
+
+  if (distanceMonth >= 1) {
+    return `${distanceMonth} month`;
+  } else {
+    const milisecondsInDay = 1000 * 60 * 60 * 24;
+    const distanceDay = Math.floor(distance / milisecondsInDay);
+    return `${distanceDay} day`;
+  }
+}
 
 // app.get('/detail-blog/:index', (req, res) => {
 //   const index = req.params.index;
